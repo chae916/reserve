@@ -9,50 +9,58 @@ resources:
 - repo: self
 
 variables:
-
-  # Container registry service connection established during pipeline creation
-  dockerRegistryServiceConnection: 'd4a5b1cc-9eaa-40a1-9520-02087d100696'
-  imageRepository: 'reserve'
-  containerRegistry: 'admin16acr.azurecr.io'
-  dockerfilePath: '**/Dockerfile'
-  tag: '$(Build.BuildId)'
-  imagePullSecret: 'admin16acr1681932c-auth'
-
+- group: common-value
+  # containerRegistry: 'event.azurecr.io'
+  # containerRegistryDockerConnection: 'acr'
+  # environment: 'aks.default'
+- name: imageRepository
+  value: 'reserve'
+- name: dockerfilePath
+  value: '**/Dockerfile'
+- name: tag
+  value: '$(Build.BuildId)'
   # Agent VM image name
-  vmImageName: 'ubuntu-latest'
-  
+- name: vmImageName
+  value: 'ubuntu-latest'
+- name: MAVEN_CACHE_FOLDER
+  value: $(Pipeline.Workspace)/.m2/repository
+- name: MAVEN_OPTS
+  value: '-Dmaven.repo.local=$(MAVEN_CACHE_FOLDER)'
+
 
 stages:
 - stage: Build
   displayName: Build stage
-  jobs:  
+  jobs:
   - job: Build
     displayName: Build
     pool:
       vmImage: $(vmImageName)
     steps:
+    - task: CacheBeta@1
+      inputs:
+        key: 'maven | "$(Agent.OS)" | **/pom.xml'
+        restoreKeys: |
+           maven | "$(Agent.OS)"
+           maven
+        path: $(MAVEN_CACHE_FOLDER)
+      displayName: Cache Maven local repo
     - task: Maven@3
       inputs:
         mavenPomFile: 'pom.xml'
-        publishJUnitResults: true
-        testResultsFiles: '**/surefire-reports/TEST-*.xml'
+        options: '-Dmaven.repo.local=$(MAVEN_CACHE_FOLDER)'
         javaHomeOption: 'JDKVersion'
-        mavenVersionOption: 'Default'
-        mavenAuthenticateFeed: false
-        effectivePomSkip: false
-        sonarQubeRunAnalysis: false
+        jdkVersionOption: '1.8'
+        jdkArchitectureOption: 'x64'
+        goals: 'package'
     - task: Docker@2
-      displayName: Build and push an image to container registry
       inputs:
-        command: buildAndPush
+        containerRegistry: $(containerRegistryDockerConnection)
         repository: $(imageRepository)
-        dockerfile: $(dockerfilePath)
-        containerRegistry: $(dockerRegistryServiceConnection)
+        command: 'buildAndPush'
+        Dockerfile: '**/Dockerfile'
         tags: |
           $(tag)
-          
-    - upload: manifests
-      artifact: manifests
 
 - stage: Deploy
   displayName: Deploy stage
@@ -63,27 +71,77 @@ stages:
     displayName: Deploy
     pool:
       vmImage: $(vmImageName)
-    environment: 'chae916mypage-1098.default'
+    environment: $(environment)
     strategy:
       runOnce:
         deploy:
           steps:
-          - task: KubernetesManifest@0
-            displayName: Create imagePullSecret
+          - task: Kubernetes@1
             inputs:
-              action: createSecret
-              secretName: $(imagePullSecret)
-              dockerRegistryEndpoint: $(dockerRegistryServiceConnection)
-              
-          - task: KubernetesManifest@0
-            displayName: Deploy to Kubernetes cluster
+              connectionType: 'Kubernetes Service Connection'
+              namespace: 'default'
+              command: 'apply'
+              useConfigurationFile: true
+              configurationType: 'inline'
+              inline: |
+                apiVersion: apps/v1
+                kind: Deployment
+                metadata:
+                  name: $(imageRepository)
+                  labels:
+                    app: $(imageRepository)
+                spec:
+                  replicas: 1
+                  selector:
+                    matchLabels:
+                      app: $(imageRepository)
+                  template:
+                    metadata:
+                      labels:
+                        app: $(imageRepository)
+                    spec:
+                      containers:
+                        - name: $(imageRepository)
+                          image: $(containerRegistry)/$(imageRepository):$(tag)
+                          ports:
+                            - containerPort: 8080
+                          readinessProbe:
+                            httpGet:
+                              path: /actuator/health
+                              port: 8080
+                            initialDelaySeconds: 10
+                            timeoutSeconds: 2
+                            periodSeconds: 5
+                            failureThreshold: 10
+                          livenessProbe:
+                            httpGet:
+                              path: /actuator/health
+                              port: 8080
+                            initialDelaySeconds: 120
+                            timeoutSeconds: 2
+                            periodSeconds: 5
+                            failureThreshold: 5
+              secretType: 'dockerRegistry'
+              containerRegistryType: 'Azure Container Registry'
+          - task: Kubernetes@1
             inputs:
-              action: deploy
-              manifests: |
-                $(Pipeline.Workspace)/manifests/deployment.yml
-                $(Pipeline.Workspace)/manifests/service.yml
-              imagePullSecrets: |
-                $(imagePullSecret)
-              containers: |
-                $(containerRegistry)/$(imageRepository):$(tag)
-
+              connectionType: 'Kubernetes Service Connection'
+              namespace: 'default'
+              command: 'apply'
+              useConfigurationFile: true
+              configurationType: 'inline'
+              inline: |
+                apiVersion: v1
+                kind: Service
+                metadata:
+                  name: $(imageRepository)
+                  labels:
+                    app: $(imageRepository)
+                spec:
+                  ports:
+                    - port: 8080
+                      targetPort: 8080
+                  selector:
+                    app: $(imageRepository)
+              secretType: 'dockerRegistry'
+              containerRegistryType: 'Azure Container Registry'
