@@ -1,0 +1,16 @@
+apiVersion : apps/v1beta1
+kind: Deployment
+metadata:
+  name: reserve 
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: reserve 
+    spec:
+      containers:
+        - name: reserve 
+          image: admin16acr.azurecr.io/reserve
+          ports:
+          - containerPort: 8080
