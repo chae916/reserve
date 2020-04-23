@@ -37,6 +37,10 @@ logging:
     org.springframework.cloud: debug
 server:
   port: 8081
+
+api:
+  url:
+    product: http://localhost:8084
 ---
 
 spring:
@@ -62,3 +66,8 @@ spring:
         event-out:
           destination: hotel
           contentType: application/json
+
+api:
+  url:
+    product: http://reserveOK:8084
+---
