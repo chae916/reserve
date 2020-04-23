@@ -12,7 +12,9 @@ import java.util.Date;
  * Created by uengine on 2018. 11. 21..
  */
 
-@FeignClient(name="reserveOK", url="http://localhost:8084")
+//@FeignClient(name="reserveOK", url="http://localhost:8084")
+
+@FeignClient(name="reserveOK", url="${api.url.product}")
 public interface ComfirmProcesingService {
 
     @RequestMapping(method= RequestMethod.GET, path="/comfirmProcesings")
