@@ -51,7 +51,7 @@ public class ReserveProcessing {
             comfirmProcesing.setIflag("01");
         }
         else {
-            comfirmProcesing.setIflag("02");
+            comfirmProcesing.setIflag("0");
         }
 
 
