@@ -69,5 +69,5 @@ spring:
 
 api:
   url:
-    product: http://reserveOK:8084
+    product: http://reserveOK:808
 ---
