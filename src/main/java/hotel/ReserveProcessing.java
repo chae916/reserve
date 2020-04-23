@@ -47,7 +47,7 @@ public class ReserveProcessing {
 
         comfirmProcesing.setId(this.getId());
 
-        if (mtype.equals("reserved")) {
+        if ("reserved".equals(mtype)) {
             comfirmProcesing.setIflag("01");
         }
         else {
